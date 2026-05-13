@@ -1,0 +1,696 @@
+#include <iostream>
+#include <fstream>
+#include <cstring>
+using namespace std;
+
+//===========================
+//==========TASK1============
+//===========================
+class VectorFloat {
+public:
+    float* data;
+    int    size;
+    int    codeError;
+    static int instanceCount;
+
+    VectorFloat() : size(1), codeError(0) {
+        data    = new float[1];
+        data[0] = 0.0f;
+        instanceCount++;
+    }
+    VectorFloat(int n) : size(n), codeError(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = 0.0f;
+        instanceCount++;
+    }
+    VectorFloat(int n, float value) : size(n), codeError(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = value;
+        instanceCount++;
+    }
+    VectorFloat(const VectorFloat& other) : size(other.size), codeError(other.codeError) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = other.data[i];
+        instanceCount++;
+    }
+    ~VectorFloat() {
+        delete[] data;
+        instanceCount--;
+    }
+
+    int getSize()      const { return size; }
+    int getCodeError() const { return codeError; }
+    static int getInstanceCount() { return instanceCount; }
+
+    VectorFloat& operator=(const VectorFloat& other) {
+        if (this == &other) return *this;
+        delete[] data;
+        size      = other.size;
+        codeError = other.codeError;
+        data      = new float[size];
+        for (int i = 0; i < size; i++) data[i] = other.data[i];
+        return *this;
+    }
+
+    float& operator[](int index) {
+        if (index < 0 || index >= size) { codeError = -1; return data[size-1]; }
+        return data[index];
+    }
+    float operator[](int index) const {
+        if (index < 0 || index >= size) return data[size-1];
+        return data[index];
+    }
+
+    VectorFloat& operator++()    { for(int i=0;i<size;i++) data[i]+=1.0f; return *this; }
+    VectorFloat  operator++(int) { VectorFloat t(*this); for(int i=0;i<size;i++) data[i]+=1.0f; return t; }
+    VectorFloat& operator--()    { for(int i=0;i<size;i++) data[i]-=1.0f; return *this; }
+    VectorFloat  operator--(int) { VectorFloat t(*this); for(int i=0;i<size;i++) data[i]-=1.0f; return t; }
+
+    bool        operator!() const { return size != 0; }
+    VectorFloat operator-() const {
+        VectorFloat r(size);
+        for(int i=0;i<size;i++) r.data[i]=-data[i];
+        return r;
+    }
+
+    VectorFloat& operator+=(const VectorFloat& o) {
+        for(int i=0;i<size&&i<o.size;i++) data[i]+=o.data[i]; return *this;
+    }
+    VectorFloat& operator-=(const VectorFloat& o) {
+        for(int i=0;i<size&&i<o.size;i++) data[i]-=o.data[i]; return *this;
+    }
+    VectorFloat& operator*=(float s) { for(int i=0;i<size;i++) data[i]*=s; return *this; }
+    VectorFloat& operator/=(float s) {
+        if(s==0.0f){codeError=-2;return *this;}
+        for(int i=0;i<size;i++) data[i]/=s; return *this;
+    }
+    VectorFloat& operator%=(float s) {
+        if(s==0.0f){codeError=-2;return *this;}
+        for(int i=0;i<size;i++) data[i]=data[i]-static_cast<int>(data[i]/s)*s;
+        return *this;
+    }
+
+    friend VectorFloat operator+(const VectorFloat& a, const VectorFloat& b);
+    friend VectorFloat operator-(const VectorFloat& a, const VectorFloat& b);
+    friend VectorFloat operator*(const VectorFloat& v, float s);
+    friend VectorFloat operator*(float s, const VectorFloat& v);
+    friend VectorFloat operator/(const VectorFloat& v, float s);
+    friend VectorFloat operator%(const VectorFloat& v, float s);
+
+    friend bool operator==(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator!=(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator> (const VectorFloat& a, const VectorFloat& b);
+    friend bool operator>=(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator< (const VectorFloat& a, const VectorFloat& b);
+    friend bool operator<=(const VectorFloat& a, const VectorFloat& b);
+
+    friend ostream& operator<<(ostream& os, const VectorFloat& v);
+    friend istream& operator>>(istream& is, VectorFloat& v);
+};
+
+int VectorFloat::instanceCount = 0;
+
+static float vecSum(const VectorFloat& v) {
+    float s=0; for(int i=0;i<v.size;i++) s+=v.data[i]; return s;
+}
+
+VectorFloat operator+(const VectorFloat& a, const VectorFloat& b) {
+    int n=a.size<b.size?a.size:b.size; VectorFloat r(n);
+    for(int i=0;i<n;i++) r.data[i]=a.data[i]+b.data[i]; return r;
+}
+VectorFloat operator-(const VectorFloat& a, const VectorFloat& b) {
+    int n=a.size<b.size?a.size:b.size; VectorFloat r(n);
+    for(int i=0;i<n;i++) r.data[i]=a.data[i]-b.data[i]; return r;
+}
+VectorFloat operator*(const VectorFloat& v, float s) {
+    VectorFloat r(v.size); for(int i=0;i<v.size;i++) r.data[i]=v.data[i]*s; return r;
+}
+VectorFloat operator*(float s, const VectorFloat& v) { return v*s; }
+VectorFloat operator/(const VectorFloat& v, float s) {
+    VectorFloat r(v.size);
+    if(s==0.0f){r.codeError=-2;return r;}
+    for(int i=0;i<v.size;i++) r.data[i]=v.data[i]/s; return r;
+}
+VectorFloat operator%(const VectorFloat& v, float s) {
+    VectorFloat r(v.size);
+    if(s==0.0f){r.codeError=-2;return r;}
+    for(int i=0;i<v.size;i++) r.data[i]=v.data[i]-static_cast<int>(v.data[i]/s)*s;
+    return r;
+}
+
+bool operator==(const VectorFloat& a, const VectorFloat& b) {
+    if(a.size!=b.size) return false;
+    for(int i=0;i<a.size;i++) if(a.data[i]!=b.data[i]) return false;
+    return true;
+}
+bool operator!=(const VectorFloat& a, const VectorFloat& b) { return !(a==b); }
+bool operator> (const VectorFloat& a, const VectorFloat& b) { return vecSum(a)> vecSum(b); }
+bool operator>=(const VectorFloat& a, const VectorFloat& b) { return vecSum(a)>=vecSum(b); }
+bool operator< (const VectorFloat& a, const VectorFloat& b) { return vecSum(a)< vecSum(b); }
+bool operator<=(const VectorFloat& a, const VectorFloat& b) { return vecSum(a)<=vecSum(b); }
+
+ostream& operator<<(ostream& os, const VectorFloat& v) {
+    os << "[ ";
+    for(int i=0;i<v.size;i++) os<<v.data[i]<<(i<v.size-1?", ":" ");
+    os << "]"; return os;
+}
+istream& operator>>(istream& is, VectorFloat& v) {
+    for(int i=0;i<v.size;i++) { cout<<"  ["<<i<<"]: "; is>>v.data[i]; }
+    return is;
+}
+
+//===========================
+//==========TASK2============
+//===========================
+class CountryCapital {
+private:
+    char** countries;
+    char** capitals;
+    int    count;
+    int    capacity;
+    int    codeError;
+
+    static char* copyStr(const char* src) {
+        if(!src) return nullptr;
+        char* d=new char[strlen(src)+1];
+        strcpy(d,src); return d;
+    }
+    void freeAll() {
+        for(int i=0;i<count;i++){delete[] countries[i];delete[] capitals[i];}
+        delete[] countries; delete[] capitals;
+    }
+
+public:
+    CountryCapital() : count(0), capacity(10), codeError(0) {
+        countries=new char*[capacity]; capitals=new char*[capacity];
+    }
+    CountryCapital(int cap) : count(0), capacity(cap), codeError(0) {
+        countries=new char*[capacity]; capitals=new char*[capacity];
+    }
+    CountryCapital(const CountryCapital& o)
+        : count(o.count), capacity(o.capacity), codeError(o.codeError) {
+        countries=new char*[capacity]; capitals=new char*[capacity];
+        for(int i=0;i<count;i++){
+            countries[i]=copyStr(o.countries[i]);
+            capitals[i] =copyStr(o.capitals[i]);
+        }
+    }
+    ~CountryCapital() { freeAll(); }
+
+    CountryCapital& operator=(const CountryCapital& o) {
+        if(this==&o) return *this;
+        freeAll();
+        count=o.count; capacity=o.capacity; codeError=o.codeError;
+        countries=new char*[capacity]; capitals=new char*[capacity];
+        for(int i=0;i<count;i++){
+            countries[i]=copyStr(o.countries[i]);
+            capitals[i] =copyStr(o.capitals[i]);
+        }
+        return *this;
+    }
+
+    int  getCount()     const { return count; }
+    int  getCodeError() const { return codeError; }
+    void clearError()         { codeError=0; }
+
+    bool add(const char* country, const char* capital) {
+        if(count>=capacity){codeError=-2;return false;}
+        countries[count]=copyStr(country);
+        capitals[count] =copyStr(capital);
+        count++; return true;
+    }
+
+    void fillDefault() {
+        const char* d[][2]={
+            {"Ukraine","Kyiv"},{"France","Paris"},{"Germany","Berlin"},
+            {"Japan","Tokyo"},{"USA","Washington"},{"UK","London"},
+            {"Spain","Madrid"},{"Italy","Rome"},{"Poland","Warsaw"},{"Canada","Ottawa"}
+        };
+        for(int i=0;i<10&&count<capacity;i++) add(d[i][0],d[i][1]);
+    }
+
+    const char* operator[](const char* country) {
+        for(int i=0;i<count;i++)
+            if(strcmp(countries[i],country)==0) return capitals[i];
+        codeError=-1; return nullptr;
+    }
+    const char* operator()(const char* capital) {
+        for(int i=0;i<count;i++)
+            if(strcmp(capitals[i],capital)==0) return countries[i];
+        codeError=-1; return nullptr;
+    }
+
+    bool saveToFile(const string& f) const {
+        ofstream fo(f); if(!fo.is_open()) return false;
+        fo<<count<<"\n";
+        for(int i=0;i<count;i++) fo<<countries[i]<<"\n"<<capitals[i]<<"\n";
+        return true;
+    }
+    bool loadFromFile(const string& f) {
+        ifstream fi(f); if(!fi.is_open()) return false;
+        for(int i=0;i<count;i++){delete[] countries[i];delete[] capitals[i];}
+        count=0;
+        int n; fi>>n; fi.ignore();
+        for(int i=0;i<n&&i<capacity;i++){
+            char b1[256],b2[256];
+            fi.getline(b1,256); fi.getline(b2,256);
+            add(b1,b2);
+        }
+        return true;
+    }
+
+    friend ostream& operator<<(ostream& os, const CountryCapital& cc);
+    friend istream& operator>>(istream& is, CountryCapital& cc);
+};
+
+ostream& operator<<(ostream& os, const CountryCapital& cc) {
+    os<<"+---------------------+---------------------+\n";
+    os<<"| Country             | Capital             |\n";
+    os<<"+---------------------+---------------------+\n";
+    for(int i=0;i<cc.count;i++){
+        char c1[21],c2[21];
+        snprintf(c1,sizeof(c1),"%-19s",cc.countries[i]);
+        snprintf(c2,sizeof(c2),"%-19s",cc.capitals[i]);
+        os<<"| "<<c1<<" | "<<c2<<" |\n";
+    }
+    os<<"+---------------------+---------------------+\n";
+    os<<"Total: "<<cc.count<<" pairs\n";
+    return os;
+}
+istream& operator>>(istream& is, CountryCapital& cc) {
+    int n; cout<<"How many pairs? "; is>>n; is.ignore();
+    for(int i=0;i<n;i++){
+        char co[256],ca[256];
+        cout<<"  Country "<<(i+1)<<": "; is.getline(co,256);
+        cout<<"  Capital "<<(i+1)<<": "; is.getline(ca,256);
+        cc.add(co,ca);
+    }
+    return is;
+}
+
+//===========================
+//==========TASK3============
+//===========================
+class MatrixFload {
+private:
+    float** data;
+    int     n, m;
+    int     codeError;
+    static int num_matrix;
+
+    void allocate(int rows, int cols) {
+        data = new float*[rows];
+        for(int i=0;i<rows;i++){
+            data[i]=new float[cols];
+            for(int j=0;j<cols;j++) data[i][j]=0.0f;
+        }
+    }
+    void freeAll() {
+        for(int i=0;i<n;i++) delete[] data[i];
+        delete[] data; data=nullptr;
+    }
+
+public:
+    MatrixFload() : data(nullptr), n(0), m(0), codeError(0) { num_matrix++; }
+
+    MatrixFload(int sz) : n(sz), m(sz), codeError(0) {
+        allocate(n,m);
+        for(int i=0;i<n;i++) data[i][i]=1.0f;
+        num_matrix++;
+    }
+    MatrixFload(int rows, int cols) : n(rows), m(cols), codeError(0) {
+        allocate(n,m); num_matrix++;
+    }
+    MatrixFload(int rows, int cols, float val) : n(rows), m(cols), codeError(0) {
+        allocate(n,m);
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]=val;
+        num_matrix++;
+    }
+    MatrixFload(const MatrixFload& o) : n(o.n), m(o.m), codeError(o.codeError) {
+        allocate(n,m);
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]=o.data[i][j];
+        num_matrix++;
+    }
+    ~MatrixFload() { if(data) freeAll(); num_matrix--; }
+
+    int getRows()      const { return n; }
+    int getCols()      const { return m; }
+    int getCodeError() const { return codeError; }
+    static int getNumMatrix() { return num_matrix; }
+
+    float& at(int i,int j)       { return data[i][j]; }
+    float  at(int i,int j) const { return data[i][j]; }
+
+    MatrixFload& operator=(const MatrixFload& o) {
+        if(this==&o) return *this;
+        freeAll(); n=o.n; m=o.m; codeError=o.codeError;
+        allocate(n,m);
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]=o.data[i][j];
+        return *this;
+    }
+
+    MatrixFload& operator++()    { for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]+=1.0f; return *this; }
+    MatrixFload  operator++(int) { MatrixFload t(*this); for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]+=1.0f; return t; }
+    MatrixFload& operator--()    { for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]-=1.0f; return *this; }
+    MatrixFload  operator--(int) { MatrixFload t(*this); for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]-=1.0f; return t; }
+
+    bool        operator!() const { return n!=0&&m!=0; }
+    MatrixFload operator-() const {
+        MatrixFload r(n,m);
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) r.data[i][j]=-data[i][j];
+        return r;
+    }
+
+    MatrixFload& operator+=(const MatrixFload& o) {
+        for(int i=0;i<n&&i<o.n;i++) for(int j=0;j<m&&j<o.m;j++) data[i][j]+=o.data[i][j];
+        return *this;
+    }
+    MatrixFload& operator+=(float s)  { for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]+=s; return *this; }
+    MatrixFload& operator+=(double s) { return *this+=static_cast<float>(s); }
+    MatrixFload& operator-=(const MatrixFload& o) {
+        for(int i=0;i<n&&i<o.n;i++) for(int j=0;j<m&&j<o.m;j++) data[i][j]-=o.data[i][j];
+        return *this;
+    }
+    MatrixFload& operator-=(float s)  { for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]-=s; return *this; }
+    MatrixFload& operator-=(double s) { return *this-=static_cast<float>(s); }
+    MatrixFload& operator*=(const MatrixFload& o) {
+        for(int i=0;i<n&&i<o.n;i++) for(int j=0;j<m&&j<o.m;j++) data[i][j]*=o.data[i][j];
+        return *this;
+    }
+    MatrixFload& operator*=(const VectorFloat& v) {
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]*=(j<v.size?v.data[j]:1.0f);
+        return *this;
+    }
+    MatrixFload& operator*=(float s)  { for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]*=s; return *this; }
+    MatrixFload& operator*=(double s) { return *this*=static_cast<float>(s); }
+    MatrixFload& operator/=(int s) {
+        if(s==0){codeError=-2;return *this;}
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]/=static_cast<float>(s);
+        return *this;
+    }
+    MatrixFload& operator/=(float s) {
+        if(s==0.0f){codeError=-2;return *this;}
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++) data[i][j]/=s;
+        return *this;
+    }
+    MatrixFload& operator/=(double s) { return *this/=static_cast<float>(s); }
+    MatrixFload& operator%=(int s) {
+        if(s==0){codeError=-2;return *this;}
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++){float& v=data[i][j];v=v-static_cast<int>(v/s)*s;}
+        return *this;
+    }
+    MatrixFload& operator%=(float s) {
+        if(s==0.0f){codeError=-2;return *this;}
+        for(int i=0;i<n;i++) for(int j=0;j<m;j++){float& v=data[i][j];v=v-static_cast<int>(v/s)*s;}
+        return *this;
+    }
+
+    friend MatrixFload operator+(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator+(const MatrixFload& a, float s);
+    friend MatrixFload operator-(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator-(const MatrixFload& a, float s);
+    friend MatrixFload operator-(const MatrixFload& a, double s);
+    friend MatrixFload operator*(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator*(const MatrixFload& a, const VectorFloat& v);
+    friend MatrixFload operator*(const MatrixFload& a, float s);
+    friend MatrixFload operator*(float s, const MatrixFload& a);
+    friend MatrixFload operator*(const MatrixFload& a, double s);
+    friend MatrixFload operator/(const MatrixFload& a, int s);
+    friend MatrixFload operator/(const MatrixFload& a, float s);
+    friend MatrixFload operator/(const MatrixFload& a, double s);
+    friend MatrixFload operator%(const MatrixFload& a, int s);
+
+    friend bool operator==(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator!=(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator> (const MatrixFload& a, const MatrixFload& b);
+    friend bool operator>=(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator< (const MatrixFload& a, const MatrixFload& b);
+    friend bool operator<=(const MatrixFload& a, const MatrixFload& b);
+
+    friend ostream& operator<<(ostream& os, const MatrixFload& m);
+    friend istream& operator>>(istream& is, MatrixFload& m);
+    friend float matSum(const MatrixFload& m);
+};
+
+int MatrixFload::num_matrix = 0;
+
+float matSum(const MatrixFload& mat) {
+    float s=0;
+    for(int i=0;i<mat.n;i++) for(int j=0;j<mat.m;j++) s+=mat.data[i][j];
+    return s;
+}
+
+MatrixFload operator+(const MatrixFload& a, const MatrixFload& b) { MatrixFload r(a); r+=b; return r; }
+MatrixFload operator+(const MatrixFload& a, float s)              { MatrixFload r(a); r+=s; return r; }
+MatrixFload operator-(const MatrixFload& a, const MatrixFload& b) { MatrixFload r(a); r-=b; return r; }
+MatrixFload operator-(const MatrixFload& a, float s)              { MatrixFload r(a); r-=s; return r; }
+MatrixFload operator-(const MatrixFload& a, double s)             { MatrixFload r(a); r-=static_cast<float>(s); return r; }
+MatrixFload operator*(const MatrixFload& a, const MatrixFload& b) { MatrixFload r(a); r*=b; return r; }
+MatrixFload operator*(const MatrixFload& a, const VectorFloat& v) { MatrixFload r(a); r*=v; return r; }
+MatrixFload operator*(const MatrixFload& a, float s)              { MatrixFload r(a); r*=s; return r; }
+MatrixFload operator*(float s, const MatrixFload& a)              { return a*s; }
+MatrixFload operator*(const MatrixFload& a, double s)             { return a*static_cast<float>(s); }
+MatrixFload operator/(const MatrixFload& a, int s)                { MatrixFload r(a); r/=s; return r; }
+MatrixFload operator/(const MatrixFload& a, float s)              { MatrixFload r(a); r/=s; return r; }
+MatrixFload operator/(const MatrixFload& a, double s)             { MatrixFload r(a); r/=static_cast<float>(s); return r; }
+MatrixFload operator%(const MatrixFload& a, int s)                { MatrixFload r(a); r%=s; return r; }
+
+bool operator==(const MatrixFload& a, const MatrixFload& b) {
+    if(a.n!=b.n||a.m!=b.m) return false;
+    for(int i=0;i<a.n;i++) for(int j=0;j<a.m;j++) if(a.data[i][j]!=b.data[i][j]) return false;
+    return true;
+}
+bool operator!=(const MatrixFload& a, const MatrixFload& b) { return !(a==b); }
+bool operator> (const MatrixFload& a, const MatrixFload& b) { return matSum(a)> matSum(b); }
+bool operator>=(const MatrixFload& a, const MatrixFload& b) { return matSum(a)>=matSum(b); }
+bool operator< (const MatrixFload& a, const MatrixFload& b) { return matSum(a)< matSum(b); }
+bool operator<=(const MatrixFload& a, const MatrixFload& b) { return matSum(a)<=matSum(b); }
+
+ostream& operator<<(ostream& os, const MatrixFload& mat) {
+    if(mat.n==0||mat.m==0){ os<<"(empty matrix)\n"; return os; }
+    os<<"[\n";
+    for(int i=0;i<mat.n;i++){
+        os<<"  ";
+        for(int j=0;j<mat.m;j++){
+            char buf[16]; snprintf(buf,sizeof(buf),"%7.2f",mat.data[i][j]);
+            os<<buf<<(j<mat.m-1?"  ":"");
+        }
+        os<<"\n";
+    }
+    os<<"] ("<<mat.n<<"x"<<mat.m<<", err="<<mat.codeError<<")\n";
+    return os;
+}
+istream& operator>>(istream& is, MatrixFload& mat) {
+    for(int i=0;i<mat.n;i++){
+        cout<<"  Row "<<i<<": ";
+        for(int j=0;j<mat.m;j++) is>>mat.data[i][j];
+    }
+    return is;
+}
+
+//===========================
+//==========MENU=============
+//===========================
+void runTask1() {
+    cout << "\n=== TASK 1: VectorFloat ===\n";
+
+    cout << "\n-- Constructors --\n";
+    VectorFloat v0;
+    VectorFloat v1(4);
+    VectorFloat v2(4, 3.0f);
+    cout << "v0 (default):  " << v0 << "\n";
+    cout << "v1 (size=4):   " << v1 << "\n";
+    cout << "v2 (4, 3.0):   " << v2 << "\n";
+
+    cout << "\n-- Unary operators --\n";
+    VectorFloat a(4);
+    cout << "Enter a (4 elements):\n"; cin >> a;
+    cout << "a:           " << a << "\n";
+    cout << "++a:         " << (++a) << "\n";
+    cout << "a++ result:  " << (a++) << "\n";
+    cout << "a after a++: " << a << "\n";
+    cout << "--a:         " << (--a) << "\n";
+    cout << "!a:          " << (!a ? "true" : "false") << "\n";
+    cout << "-a:          " << (-a) << "\n";
+
+    cout << "\n-- Binary operators: (x+y)*2 - z/1.5 + x%3 --\n";
+    VectorFloat x(4), y(4), z(4);
+    cout << "Enter x (4 elements):\n"; cin >> x;
+    cout << "Enter y (4 elements):\n"; cin >> y;
+    cout << "Enter z (4 elements):\n"; cin >> z;
+    VectorFloat r1 = (x + y) * 2.0f - z / 1.5f + x % 3.0f;
+    cout << "x:      " << x  << "\n";
+    cout << "y:      " << y  << "\n";
+    cout << "z:      " << z  << "\n";
+    cout << "result: " << r1 << "\n";
+
+    cout << "\n-- Compound assignment --\n";
+    VectorFloat p(4);
+    cout << "Enter p (4 elements):\n"; cin >> p;
+    cout << "p:        " << p << "\n";
+    p += x; cout << "p += x:   " << p << "\n";
+    p -= y; cout << "p -= y:   " << p << "\n";
+    p *= 2.0f; cout << "p *= 2.0: " << p << "\n";
+    p /= 2.0f; cout << "p /= 2.0: " << p << "\n";
+    p %= 3.0f; cout << "p %= 3.0: " << p << "\n";
+
+    cout << "\n-- Comparison --\n";
+    cout << "x > y:  " << (x >  y ? "true" : "false") << "\n";
+    cout << "x >= y: " << (x >= y ? "true" : "false") << "\n";
+    cout << "x < y:  " << (x <  y ? "true" : "false") << "\n";
+    cout << "x <= y: " << (x <= y ? "true" : "false") << "\n";
+    cout << "x == y: " << (x == y ? "true" : "false") << "\n";
+    cout << "x != y: " << (x != y ? "true" : "false") << "\n";
+
+    cout << "\n-- Index & codeError --\n";
+    VectorFloat r(4);
+    cout << "Enter r (4 elements):\n"; cin >> r;
+    r[0] = 99.0f;
+    cout << "r[0]=99: " << r << "\n";
+    r[99];
+    cout << "r[99] -> codeError=" << r.getCodeError() << "\n";
+
+    cout << "\n-- Instance counter --\n";
+    cout << "VectorFloat instances: " << VectorFloat::getInstanceCount() << "\n";
+}
+
+void runTask2() {
+    cout << "\n=== TASK 2: CountryCapital ===\n";
+
+    CountryCapital cc(20);
+    cout << "1 = Enter manually\n2 = Use preset data\nChoice: ";
+    int ch; cin >> ch; cin.ignore();
+
+    if(ch == 2) {
+        cc.fillDefault();
+        cout << "\nPreset data:\n" << cc;
+    } else {
+        cin >> cc;
+        cout << "Your data:\n" << cc;
+    }
+
+    cout << "\n-- operator[] : search capital by country --\n";
+    char buf[256];
+    cout << "Enter country: "; cin.getline(buf, 256);
+    const char* cap = cc[buf];
+    if(cap) cout << "  " << buf << " -> " << cap << "\n";
+    else    cout << "  Not found! codeError=" << cc.getCodeError() << "\n";
+    cc.clearError();
+
+    cout << "\n-- operator() : search country by capital --\n";
+    cout << "Enter capital: "; cin.getline(buf, 256);
+    const char* cou = cc(buf);
+    if(cou) cout << "  " << buf << " -> " << cou << "\n";
+    else    cout << "  Not found! codeError=" << cc.getCodeError() << "\n";
+    cc.clearError();
+
+    cout << "\n-- Add new pair --\n";
+    char co[256], ca[256];
+    cout << "New country: "; cin.getline(co, 256);
+    cout << "New capital: "; cin.getline(ca, 256);
+    cc.add(co, ca);
+    cout << "Updated:\n" << cc;
+
+    cout << "\n-- Save to file & Load --\n";
+    cc.saveToFile("countries.txt");
+    CountryCapital cc2(20);
+    cc2.loadFromFile("countries.txt");
+    cout << "Loaded:\n" << cc2;
+
+    cout << "\n-- Copy constructor --\n";
+    CountryCapital cc3(cc2);
+    cout << "Copy:\n" << cc3;
+
+    cout << "\n-- Assignment operator --\n";
+    CountryCapital cc4(5);
+    cc4 = cc2;
+    cout << "Assigned:\n" << cc4;
+}
+
+void runTask3() {
+    cout << "\n=== TASK 3: MatrixFload ===\n";
+
+    cout << "\n-- Constructors --\n";
+    MatrixFload m0;
+    MatrixFload m1(3);
+    MatrixFload m2(2, 3);
+    MatrixFload m3(2, 3, 4.0f);
+    MatrixFload m4(m3);
+    cout << "m0 (empty):\n"        << m0;
+    cout << "m1 (identity 3x3):\n" << m1;
+    cout << "m2 (zeros 2x3):\n"    << m2;
+    cout << "m3 (2x3, val=4):\n"   << m3;
+    cout << "m4 (copy of m3):\n"   << m4;
+
+    cout << "\n-- Unary operators --\n";
+    MatrixFload U(2, 3);
+    cout << "Enter U (2x3):\n"; cin >> U;
+    cout << "U:\n"     << U;
+    cout << "++U:\n"   << (++U);
+    cout << "U--:\n"   << (U--);
+    cout << "U now:\n" << U;
+    cout << "!U: "     << (!U ? "true" : "false") << "\n";
+    cout << "-U:\n"    << (-U);
+
+    cout << "\n-- Enter matrices A, B, C (2x3) --\n";
+    MatrixFload A(2,3), B(2,3), C(2,3);
+    cout << "Enter A (2x3):\n"; cin >> A;
+    cout << "Enter B (2x3):\n"; cin >> B;
+    cout << "Enter C (2x3):\n"; cin >> C;
+    cout << "A:\n" << A;
+    cout << "B:\n" << B;
+    cout << "C:\n" << C;
+
+    cout << "\n-- Expression: (A+B)*2.0 - C/1.5 + A%3 --\n";
+    MatrixFload r1 = (A + B) * 2.0f - C / 1.5f + A % 3;
+    cout << "Result:\n" << r1;
+
+    cout << "\n-- Compound assignment --\n";
+    MatrixFload P(A);
+    cout << "P = A:\n" << P;
+    P += B;    cout << "P += B:\n"   << P;
+    P -= C;    cout << "P -= C:\n"   << P;
+    P *= 0.5f; cout << "P *= 0.5:\n" << P;
+    P /= 2.0f; cout << "P /= 2.0:\n" << P;
+    P %= 3;    cout << "P %= 3:\n"   << P;
+
+    cout << "\n-- Expression: (++Q)*vec - (-A)/1.5 + B --\n";
+    VectorFloat vec(3);
+    cout << "Enter vec (3 elements):\n"; cin >> vec;
+    MatrixFload Q(A);
+    MatrixFload r3 = (++Q) * vec - (-A) / 1.5f + B;
+    cout << "vec: " << vec << "\n";
+    cout << "Result:\n" << r3;
+
+    cout << "\n-- Comparison --\n";
+    cout << "A > B:  " << (A >  B ? "true" : "false") << "\n";
+    cout << "A >= B: " << (A >= B ? "true" : "false") << "\n";
+    cout << "A < C:  " << (A <  C ? "true" : "false") << "\n";
+    cout << "A <= C: " << (A <= C ? "true" : "false") << "\n";
+    cout << "A == A: " << (A == A ? "true" : "false") << "\n";
+    cout << "A != B: " << (A != B ? "true" : "false") << "\n";
+
+    cout << "\n-- Instance counter --\n";
+    cout << "MatrixFload instances: " << MatrixFload::getNumMatrix() << "\n";
+}
+
+int main() {
+    int choice = 0;
+    do {
+        cout << "\n=== MENU ===\n";
+        cout << "1 - VectorFloat\n";
+        cout << "2 - CountryCapital\n";
+        cout << "3 - MatrixFload\n";
+        cout << "0 - Exit\n";
+        cout << "Choice: ";
+        cin >> choice; cin.ignore();
+        switch(choice) {
+            case 1: runTask1(); break;
+            case 2: runTask2(); break;
+            case 3: runTask3(); break;
+            case 0: cout << "Goodbye!\n"; break;
+            default: cout << "Invalid choice!\n"; break;
+        }
+    } while(choice != 0);
+    return 0;
+}
