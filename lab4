@@ -1,0 +1,951 @@
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+#include <ctime>
+#include <cstring>
+
+void section(const char* title) {
+    std::cout << "\n---- " << title << " ----\n";
+}
+
+class VectorFloat {
+private:
+    float* data;
+    int    size;
+    int    errorCode;
+
+    static int instanceCount;
+
+public:
+
+    VectorFloat() : size(1), errorCode(0) {
+        data    = new float[1];
+        data[0] = 0.0f;
+        instanceCount++;
+    }
+
+    VectorFloat(int n) : size(n), errorCode(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = 0.0f;
+        instanceCount++;
+    }
+
+    VectorFloat(int n, float value) : size(n), errorCode(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = value;
+        instanceCount++;
+    }
+
+    VectorFloat(const VectorFloat& other) : size(other.size), errorCode(other.errorCode) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = other.data[i];
+        instanceCount++;
+    }
+
+    ~VectorFloat() {
+        delete[] data;
+        instanceCount--;
+    }
+
+    int getSize()      const { return size; }
+    int getErrorCode() const { return errorCode; }
+    static int getInstanceCount() { return instanceCount; }
+
+    void fillRandom(float lo = -10.0f, float hi = 10.0f) {
+        for (int i = 0; i < size; i++)
+            data[i] = lo + static_cast<float>(rand()) /
+                      (static_cast<float>(RAND_MAX) / (hi - lo));
+    }
+
+    void readFromKeyboard() {
+        std::cout << "Enter " << size << " element(s):\n";
+        for (int i = 0; i < size; i++) {
+            std::cout << "  [" << i << "]: ";
+            std::cin >> data[i];
+        }
+    }
+
+    bool readFromFile(const std::string& filename) {
+        std::ifstream fin(filename);
+        if (!fin.is_open()) return false;
+        for (int i = 0; i < size; i++) fin >> data[i];
+        return true;
+    }
+
+    void print(const std::string& label = "v") const {
+        std::cout << label << " = [ ";
+        for (int i = 0; i < size; i++)
+            std::cout << data[i] << (i < size - 1 ? ", " : " ");
+        std::cout << "]  (size=" << size << ", err=" << errorCode << ")\n";
+    }
+
+    VectorFloat& operator=(const VectorFloat& other) {
+        if (this == &other) return *this;
+        delete[] data;
+        size      = other.size;
+        errorCode = other.errorCode;
+        data      = new float[size];
+        for (int i = 0; i < size; i++) data[i] = other.data[i];
+        return *this;
+    }
+
+    float& operator[](int index) {
+        if (index < 0 || index >= size) {
+            errorCode = -1;
+            return data[size - 1];
+        }
+        return data[index];
+    }
+
+    float operator[](int index) const {
+        if (index < 0 || index >= size) return data[size - 1];
+        return data[index];
+    }
+
+    VectorFloat& operator++()    { for (int i = 0; i < size; i++) data[i] += 1.0f; return *this; }
+    VectorFloat  operator++(int) { VectorFloat tmp(*this); for (int i = 0; i < size; i++) data[i] += 1.0f; return tmp; }
+    VectorFloat& operator--()    { for (int i = 0; i < size; i++) data[i] -= 1.0f; return *this; }
+    VectorFloat  operator--(int) { VectorFloat tmp(*this); for (int i = 0; i < size; i++) data[i] -= 1.0f; return tmp; }
+
+    bool        operator!()  const { return size != 0; }
+    VectorFloat operator-()  const {
+        VectorFloat result(size);
+        for (int i = 0; i < size; i++) result.data[i] = -data[i];
+        return result;
+    }
+
+    VectorFloat& operator+=(const VectorFloat& rhs) {
+        for (int i = 0; i < size && i < rhs.size; i++) data[i] += rhs.data[i];
+        return *this;
+    }
+    VectorFloat& operator-=(const VectorFloat& rhs) {
+        for (int i = 0; i < size && i < rhs.size; i++) data[i] -= rhs.data[i];
+        return *this;
+    }
+    VectorFloat& operator*=(float s) { for (int i = 0; i < size; i++) data[i] *= s; return *this; }
+    VectorFloat& operator/=(float s) {
+        if (s == 0.0f) { errorCode = -2; return *this; }
+        for (int i = 0; i < size; i++) data[i] /= s;
+        return *this;
+    }
+    VectorFloat& operator%=(float s) {
+        if (s == 0.0f) { errorCode = -2; return *this; }
+        for (int i = 0; i < size; i++)
+            data[i] = data[i] - static_cast<int>(data[i] / s) * s;
+        return *this;
+    }
+
+    friend VectorFloat operator+(const VectorFloat& a, const VectorFloat& b);
+    friend VectorFloat operator-(const VectorFloat& a, const VectorFloat& b);
+    friend VectorFloat operator*(const VectorFloat& v, float s);
+    friend VectorFloat operator*(float s, const VectorFloat& v);
+    friend VectorFloat operator/(const VectorFloat& v, float s);
+    friend VectorFloat operator%(const VectorFloat& v, float s);
+
+    friend bool operator==(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator!=(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator> (const VectorFloat& a, const VectorFloat& b);
+    friend bool operator>=(const VectorFloat& a, const VectorFloat& b);
+    friend bool operator< (const VectorFloat& a, const VectorFloat& b);
+    friend bool operator<=(const VectorFloat& a, const VectorFloat& b);
+
+    friend std::ostream& operator<<(std::ostream& os, const VectorFloat& v);
+    friend std::istream& operator>>(std::istream& is, VectorFloat& v);
+};
+
+int VectorFloat::instanceCount = 0;
+
+static float sum(const VectorFloat& v) {
+    float s = 0;
+    for (int i = 0; i < v.getSize(); i++) s += v[i];
+    return s;
+}
+
+VectorFloat operator+(const VectorFloat& a, const VectorFloat& b) {
+    int n = a.size < b.size ? a.size : b.size;
+    VectorFloat r(n);
+    for (int i = 0; i < n; i++) r.data[i] = a.data[i] + b.data[i];
+    return r;
+}
+VectorFloat operator-(const VectorFloat& a, const VectorFloat& b) {
+    int n = a.size < b.size ? a.size : b.size;
+    VectorFloat r(n);
+    for (int i = 0; i < n; i++) r.data[i] = a.data[i] - b.data[i];
+    return r;
+}
+VectorFloat operator*(const VectorFloat& v, float s) {
+    VectorFloat r(v.size);
+    for (int i = 0; i < v.size; i++) r.data[i] = v.data[i] * s;
+    return r;
+}
+VectorFloat operator*(float s, const VectorFloat& v) { return v * s; }
+VectorFloat operator/(const VectorFloat& v, float s) {
+    VectorFloat r(v.size);
+    if (s == 0.0f) { r.errorCode = -2; return r; }
+    for (int i = 0; i < v.size; i++) r.data[i] = v.data[i] / s;
+    return r;
+}
+VectorFloat operator%(const VectorFloat& v, float s) {
+    VectorFloat r(v.size);
+    if (s == 0.0f) { r.errorCode = -2; return r; }
+    for (int i = 0; i < v.size; i++)
+        r.data[i] = v.data[i] - static_cast<int>(v.data[i] / s) * s;
+    return r;
+}
+
+bool operator==(const VectorFloat& a, const VectorFloat& b) {
+    if (a.size != b.size) return false;
+    for (int i = 0; i < a.size; i++) if (a.data[i] != b.data[i]) return false;
+    return true;
+}
+bool operator!=(const VectorFloat& a, const VectorFloat& b) { return !(a == b); }
+bool operator> (const VectorFloat& a, const VectorFloat& b) { return sum(a) >  sum(b); }
+bool operator>=(const VectorFloat& a, const VectorFloat& b) { return sum(a) >= sum(b); }
+bool operator< (const VectorFloat& a, const VectorFloat& b) { return sum(a) <  sum(b); }
+bool operator<=(const VectorFloat& a, const VectorFloat& b) { return sum(a) <= sum(b); }
+
+std::ostream& operator<<(std::ostream& os, const VectorFloat& v) {
+    os << "[ ";
+    for (int i = 0; i < v.size; i++) os << v.data[i] << (i < v.size - 1 ? ", " : " ");
+    os << "]";
+    return os;
+}
+std::istream& operator>>(std::istream& is, VectorFloat& v) {
+    for (int i = 0; i < v.size; i++) is >> v.data[i];
+    return is;
+}
+
+class CountryCapital {
+private:
+    char** countries;
+    char** capitals;
+    int    count;
+    int    capacity;
+    int    errorCode;
+
+    static char* copyString(const char* src) {
+        if (!src) return nullptr;
+        char* dst = new char[strlen(src) + 1];
+        strcpy(dst, src);
+        return dst;
+    }
+
+    void freeAll() {
+        for (int i = 0; i < count; i++) {
+            delete[] countries[i];
+            delete[] capitals[i];
+        }
+        delete[] countries;
+        delete[] capitals;
+    }
+
+public:
+
+    CountryCapital() : count(0), capacity(10), errorCode(0) {
+        countries = new char*[capacity];
+        capitals  = new char*[capacity];
+    }
+
+    CountryCapital(int cap) : count(0), capacity(cap), errorCode(0) {
+        countries = new char*[capacity];
+        capitals  = new char*[capacity];
+    }
+
+    CountryCapital(const CountryCapital& other)
+        : count(other.count), capacity(other.capacity), errorCode(other.errorCode) {
+        countries = new char*[capacity];
+        capitals  = new char*[capacity];
+        for (int i = 0; i < count; i++) {
+            countries[i] = copyString(other.countries[i]);
+            capitals[i]  = copyString(other.capitals[i]);
+        }
+    }
+
+    ~CountryCapital() { freeAll(); }
+
+    CountryCapital& operator=(const CountryCapital& other) {
+        if (this == &other) return *this;
+        freeAll();
+        count     = other.count;
+        capacity  = other.capacity;
+        errorCode = other.errorCode;
+        countries = new char*[capacity];
+        capitals  = new char*[capacity];
+        for (int i = 0; i < count; i++) {
+            countries[i] = copyString(other.countries[i]);
+            capitals[i]  = copyString(other.capitals[i]);
+        }
+        return *this;
+    }
+
+    int  getCount()     const { return count; }
+    int  getErrorCode() const { return errorCode; }
+    void clearError()         { errorCode = 0; }
+
+    bool add(const char* country, const char* capital) {
+        if (count >= capacity) { errorCode = -2; return false; }
+        countries[count] = copyString(country);
+        capitals[count]  = copyString(capital);
+        count++;
+        return true;
+    }
+
+    void fillDefault() {
+        const char* data[][2] = {
+            {"Ukraine",        "Kyiv"},
+            {"France",         "Paris"},
+            {"Germany",        "Berlin"},
+            {"Japan",          "Tokyo"},
+            {"USA",            "Washington"},
+            {"United Kingdom", "London"},
+            {"Spain",          "Madrid"},
+            {"Italy",          "Rome"},
+            {"Poland",         "Warsaw"},
+            {"Canada",         "Ottawa"}
+        };
+        int n = sizeof(data) / sizeof(data[0]);
+        for (int i = 0; i < n && count < capacity; i++)
+            add(data[i][0], data[i][1]);
+    }
+
+    int findByCountry(const char* country) const {
+        for (int i = 0; i < count; i++)
+            if (strcmp(countries[i], country) == 0) return i;
+        return -1;
+    }
+    int findByCapital(const char* capital) const {
+        for (int i = 0; i < count; i++)
+            if (strcmp(capitals[i], capital) == 0) return i;
+        return -1;
+    }
+
+    const char* operator[](const char* country) {
+        int idx = findByCountry(country);
+        if (idx == -1) { errorCode = -1; return nullptr; }
+        return capitals[idx];
+    }
+
+    const char* operator()(const char* capital) {
+        int idx = findByCapital(capital);
+        if (idx == -1) { errorCode = -1; return nullptr; }
+        return countries[idx];
+    }
+
+    bool saveToFile(const std::string& filename) const {
+        std::ofstream fout(filename);
+        if (!fout.is_open()) return false;
+        fout << count << "\n";
+        for (int i = 0; i < count; i++)
+            fout << countries[i] << "\n" << capitals[i] << "\n";
+        return true;
+    }
+
+    bool loadFromFile(const std::string& filename) {
+        std::ifstream fin(filename);
+        if (!fin.is_open()) return false;
+        for (int i = 0; i < count; i++) { delete[] countries[i]; delete[] capitals[i]; }
+        count = 0;
+        int n; fin >> n; fin.ignore();
+        for (int i = 0; i < n && i < capacity; i++) {
+            char b1[256], b2[256];
+            fin.getline(b1, 256);
+            fin.getline(b2, 256);
+            add(b1, b2);
+        }
+        return true;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const CountryCapital& cc);
+    friend std::istream& operator>>(std::istream& is, CountryCapital& cc);
+};
+
+std::ostream& operator<<(std::ostream& os, const CountryCapital& cc) {
+    os << "+------------------------------+------------------------------+\n";
+    os << "| Country                      | Capital                      |\n";
+    os << "+------------------------------+------------------------------+\n";
+    for (int i = 0; i < cc.count; i++) {
+        char col1[32], col2[32];
+        snprintf(col1, sizeof(col1), "%-28s", cc.countries[i]);
+        snprintf(col2, sizeof(col2), "%-28s", cc.capitals[i]);
+        os << "| " << col1 << " | " << col2 << " |\n";
+    }
+    os << "+------------------------------+------------------------------+\n";
+    os << "  Total pairs: " << cc.count << "\n";
+    return os;
+}
+
+std::istream& operator>>(std::istream& is, CountryCapital& cc) {
+    int n;
+    std::cout << "How many pairs to enter? ";
+    is >> n;
+    is.ignore();
+    for (int i = 0; i < n; i++) {
+        char country[256], capital[256];
+        std::cout << "  Country  " << (i + 1) << ": "; is.getline(country, 256);
+        std::cout << "  Capital  " << (i + 1) << ": "; is.getline(capital, 256);
+        cc.add(country, capital);
+    }
+    return is;
+}
+
+
+class RowVector {
+public:
+    float* data;
+    int    size;
+    int    errorCode;
+
+    RowVector() : size(1), errorCode(0) { data = new float[1]; data[0] = 0.0f; }
+    RowVector(int n) : size(n), errorCode(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = 0.0f;
+    }
+    RowVector(int n, float val) : size(n), errorCode(0) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = val;
+    }
+    RowVector(const RowVector& o) : size(o.size), errorCode(o.errorCode) {
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = o.data[i];
+    }
+    ~RowVector() { delete[] data; }
+
+    RowVector& operator=(const RowVector& o) {
+        if (this == &o) return *this;
+        delete[] data;
+        size = o.size; errorCode = o.errorCode;
+        data = new float[size];
+        for (int i = 0; i < size; i++) data[i] = o.data[i];
+        return *this;
+    }
+    float& operator[](int i) {
+        if (i < 0 || i >= size) { errorCode = -1; return data[size - 1]; }
+        return data[i];
+    }
+    float operator[](int i) const {
+        if (i < 0 || i >= size) return data[size - 1];
+        return data[i];
+    }
+};
+
+class MatrixFload {
+private:
+    RowVector* rows;
+    int        rowCount;
+    int        colCount;
+    int        errorCode;
+    static int instanceCount;
+
+    void allocate(int r, int c) {
+        rows = new RowVector[r];
+        for (int i = 0; i < r; i++) {
+            delete[] rows[i].data;
+            rows[i].data = new float[c];
+            rows[i].size = c;
+            for (int j = 0; j < c; j++) rows[i].data[j] = 0.0f;
+        }
+    }
+    void freeAll() { delete[] rows; rows = nullptr; }
+
+public:
+
+    MatrixFload() : rows(nullptr), rowCount(0), colCount(0), errorCode(0) {
+        instanceCount++;
+    }
+
+    MatrixFload(int n) : rowCount(n), colCount(n), errorCode(0) {
+        allocate(rowCount, colCount);
+        for (int i = 0; i < rowCount; i++) rows[i].data[i] = 1.0f;
+        instanceCount++;
+    }
+
+    MatrixFload(int r, int c) : rowCount(r), colCount(c), errorCode(0) {
+        allocate(rowCount, colCount);
+        instanceCount++;
+    }
+
+    MatrixFload(int r, int c, float value) : rowCount(r), colCount(c), errorCode(0) {
+        allocate(rowCount, colCount);
+        for (int i = 0; i < rowCount; i++)
+            for (int j = 0; j < colCount; j++)
+                rows[i].data[j] = value;
+        instanceCount++;
+    }
+
+    MatrixFload(const MatrixFload& other) : rowCount(other.rowCount), colCount(other.colCount), errorCode(other.errorCode) {
+        allocate(rowCount, colCount);
+        for (int i = 0; i < rowCount; i++)
+            for (int j = 0; j < colCount; j++)
+                rows[i].data[j] = other.rows[i].data[j];
+        instanceCount++;
+    }
+
+    ~MatrixFload() { freeAll(); instanceCount--; }
+
+    int getRows()         const { return rowCount; }
+    int getCols()         const { return colCount; }
+    int getErrorCode()    const { return errorCode; }
+    static int getInstanceCount() { return instanceCount; }
+
+    float& at(int i, int j)       { return rows[i].data[j]; }
+    float  at(int i, int j) const { return rows[i].data[j]; }
+
+    void fillRandom(float lo = -5.0f, float hi = 5.0f) {
+        for (int i = 0; i < rowCount; i++)
+            for (int j = 0; j < colCount; j++)
+                rows[i].data[j] = lo + static_cast<float>(rand()) /
+                    (static_cast<float>(RAND_MAX) / (hi - lo));
+    }
+
+    bool readFromFile(const std::string& filename) {
+        std::ifstream fin(filename);
+        if (!fin.is_open()) return false;
+        for (int i = 0; i < rowCount; i++)
+            for (int j = 0; j < colCount; j++)
+                fin >> rows[i].data[j];
+        return true;
+    }
+
+    MatrixFload& operator=(const MatrixFload& other) {
+        if (this == &other) return *this;
+        freeAll();
+        rowCount  = other.rowCount;
+        colCount  = other.colCount;
+        errorCode = other.errorCode;
+        allocate(rowCount, colCount);
+        for (int i = 0; i < rowCount; i++)
+            for (int j = 0; j < colCount; j++)
+                rows[i].data[j] = other.rows[i].data[j];
+        return *this;
+    }
+
+    MatrixFload& operator++()    { for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]+=1.0f; return *this; }
+    MatrixFload  operator++(int) { MatrixFload t(*this); for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]+=1.0f; return t; }
+    MatrixFload& operator--()    { for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]-=1.0f; return *this; }
+    MatrixFload  operator--(int) { MatrixFload t(*this); for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]-=1.0f; return t; }
+
+    bool        operator!()  const { return rowCount != 0 && colCount != 0; }
+    MatrixFload operator-()  const {
+        MatrixFload r(rowCount, colCount);
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) r.rows[i].data[j]=-rows[i].data[j];
+        return r;
+    }
+
+    MatrixFload& operator+=(const MatrixFload& o) {
+        for (int i=0;i<rowCount&&i<o.rowCount;i++) for (int j=0;j<colCount&&j<o.colCount;j++) rows[i].data[j]+=o.rows[i].data[j];
+        return *this;
+    }
+    MatrixFload& operator+=(float s) { for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]+=s; return *this; }
+    MatrixFload& operator-=(const MatrixFload& o) {
+        for (int i=0;i<rowCount&&i<o.rowCount;i++) for (int j=0;j<colCount&&j<o.colCount;j++) rows[i].data[j]-=o.rows[i].data[j];
+        return *this;
+    }
+    MatrixFload& operator-=(float s)  { for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]-=s; return *this; }
+    MatrixFload& operator-=(double s) { return *this -= static_cast<float>(s); }
+    MatrixFload& operator*=(const MatrixFload& o) {
+        for (int i=0;i<rowCount&&i<o.rowCount;i++) for (int j=0;j<colCount&&j<o.colCount;j++) rows[i].data[j]*=o.rows[i].data[j];
+        return *this;
+    }
+    MatrixFload& operator*=(const RowVector& v) {
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]*=(j<v.size?v.data[j]:1.0f);
+        return *this;
+    }
+    MatrixFload& operator*=(float s)  { for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]*=s; return *this; }
+    MatrixFload& operator*=(double s) { return *this *= static_cast<float>(s); }
+    MatrixFload& operator/=(int s) {
+        if (s==0) { errorCode=-2; return *this; }
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]/=static_cast<float>(s);
+        return *this;
+    }
+    MatrixFload& operator/=(float s) {
+        if (s==0.0f) { errorCode=-2; return *this; }
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) rows[i].data[j]/=s;
+        return *this;
+    }
+    MatrixFload& operator/=(double s) { return *this /= static_cast<float>(s); }
+    MatrixFload& operator%=(int s) {
+        if (s==0) { errorCode=-2; return *this; }
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) { float& v=rows[i].data[j]; v=v-static_cast<int>(v/s)*s; }
+        return *this;
+    }
+    MatrixFload& operator%=(float s) {
+        if (s==0.0f) { errorCode=-2; return *this; }
+        for (int i=0;i<rowCount;i++) for (int j=0;j<colCount;j++) { float& v=rows[i].data[j]; v=v-static_cast<int>(v/s)*s; }
+        return *this;
+    }
+
+    friend MatrixFload operator+(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator+(const MatrixFload& a, float s);
+    friend MatrixFload operator-(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator-(const MatrixFload& a, float s);
+    friend MatrixFload operator-(const MatrixFload& a, double s);
+    friend MatrixFload operator*(const MatrixFload& a, const MatrixFload& b);
+    friend MatrixFload operator*(const MatrixFload& a, const RowVector& v);
+    friend MatrixFload operator*(const MatrixFload& a, float s);
+    friend MatrixFload operator*(float s, const MatrixFload& a);
+    friend MatrixFload operator*(const MatrixFload& a, double s);
+    friend MatrixFload operator/(const MatrixFload& a, int s);
+    friend MatrixFload operator/(const MatrixFload& a, float s);
+    friend MatrixFload operator%(const MatrixFload& a, int s);
+
+    friend bool operator==(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator!=(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator> (const MatrixFload& a, const MatrixFload& b);
+    friend bool operator>=(const MatrixFload& a, const MatrixFload& b);
+    friend bool operator< (const MatrixFload& a, const MatrixFload& b);
+    friend bool operator<=(const MatrixFload& a, const MatrixFload& b);
+
+    friend std::ostream& operator<<(std::ostream& os, const MatrixFload& m);
+    friend std::istream& operator>>(std::istream& is, MatrixFload& m);
+    friend float matSum(const MatrixFload& m);
+};
+
+int MatrixFload::instanceCount = 0;
+
+float matSum(const MatrixFload& m) {
+    float s = 0;
+    for (int i=0;i<m.getRows();i++) for (int j=0;j<m.getCols();j++) s+=m.at(i,j);
+    return s;
+}
+
+MatrixFload operator+(const MatrixFload& a, const MatrixFload& b) {
+    int r=a.rowCount<b.rowCount?a.rowCount:b.rowCount, c=a.colCount<b.colCount?a.colCount:b.colCount;
+    MatrixFload res(r,c);
+    for(int i=0;i<r;i++) for(int j=0;j<c;j++) res.rows[i].data[j]=a.rows[i].data[j]+b.rows[i].data[j];
+    return res;
+}
+MatrixFload operator+(const MatrixFload& a, float s)  { MatrixFload r(a); r+=s; return r; }
+MatrixFload operator-(const MatrixFload& a, const MatrixFload& b) {
+    int r=a.rowCount<b.rowCount?a.rowCount:b.rowCount, c=a.colCount<b.colCount?a.colCount:b.colCount;
+    MatrixFload res(r,c);
+    for(int i=0;i<r;i++) for(int j=0;j<c;j++) res.rows[i].data[j]=a.rows[i].data[j]-b.rows[i].data[j];
+    return res;
+}
+MatrixFload operator-(const MatrixFload& a, float s)  { MatrixFload r(a); r-=s; return r; }
+MatrixFload operator-(const MatrixFload& a, double s) { MatrixFload r(a); r-=static_cast<float>(s); return r; }
+MatrixFload operator*(const MatrixFload& a, const MatrixFload& b) {
+    int r=a.rowCount<b.rowCount?a.rowCount:b.rowCount, c=a.colCount<b.colCount?a.colCount:b.colCount;
+    MatrixFload res(r,c);
+    for(int i=0;i<r;i++) for(int j=0;j<c;j++) res.rows[i].data[j]=a.rows[i].data[j]*b.rows[i].data[j];
+    return res;
+}
+MatrixFload operator*(const MatrixFload& a, const RowVector& v) { MatrixFload r(a); r*=v; return r; }
+MatrixFload operator*(const MatrixFload& a, float s)  { MatrixFload r(a); r*=s; return r; }
+MatrixFload operator*(float s, const MatrixFload& a)  { return a*s; }
+MatrixFload operator*(const MatrixFload& a, double s) { return a*static_cast<float>(s); }
+MatrixFload operator/(const MatrixFload& a, int s)    { MatrixFload r(a); r/=s; return r; }
+MatrixFload operator/(const MatrixFload& a, float s)  { MatrixFload r(a); r/=s; return r; }
+MatrixFload operator/(const MatrixFload& a, double s) { MatrixFload r(a); r/=static_cast<float>(s); return r; }
+MatrixFload operator%(const MatrixFload& a, int s)    { MatrixFload r(a); r%=s; return r; }
+
+bool operator==(const MatrixFload& a, const MatrixFload& b) {
+    if(a.rowCount!=b.rowCount||a.colCount!=b.colCount) return false;
+    for(int i=0;i<a.rowCount;i++) for(int j=0;j<a.colCount;j++) if(a.rows[i].data[j]!=b.rows[i].data[j]) return false;
+    return true;
+}
+bool operator!=(const MatrixFload& a, const MatrixFload& b) { return !(a==b); }
+bool operator> (const MatrixFload& a, const MatrixFload& b) { return matSum(a) >  matSum(b); }
+bool operator>=(const MatrixFload& a, const MatrixFload& b) { return matSum(a) >= matSum(b); }
+bool operator< (const MatrixFload& a, const MatrixFload& b) { return matSum(a) <  matSum(b); }
+bool operator<=(const MatrixFload& a, const MatrixFload& b) { return matSum(a) <= matSum(b); }
+
+std::ostream& operator<<(std::ostream& os, const MatrixFload& m) {
+    os << "[\n";
+    for(int i=0;i<m.rowCount;i++){
+        os << "  ";
+        for(int j=0;j<m.colCount;j++){
+            char buf[16];
+            snprintf(buf, sizeof(buf), "%8.3f", m.rows[i].data[j]);
+            os << buf << (j<m.colCount-1?"  ":"");
+        }
+        os << "\n";
+    }
+    os << "]  (" << m.rowCount << "x" << m.colCount << ", err=" << m.errorCode << ")\n";
+    return os;
+}
+
+std::istream& operator>>(std::istream& is, MatrixFload& m) {
+    std::cout << "Enter matrix " << m.rowCount << "x" << m.colCount << ":\n";
+    for(int i=0;i<m.rowCount;i++){
+        std::cout << "  Row " << i << ": ";
+        for(int j=0;j<m.colCount;j++) is >> m.rows[i].data[j];
+    }
+    return is;
+}
+
+
+void inputVector(VectorFloat& v, const std::string& name) {
+    int choice;
+    std::cout << "  Input " << name << " — choose: 1=keyboard, 2=random: ";
+    std::cin >> choice;
+    if (choice == 2) {
+        v.fillRandom(-10, 10);
+        std::cout << "  " << name << " (random): " << v << "\n";
+    } else {
+        std::cout << "  Enter " << v.getSize() << " value(s): ";
+        v.readFromKeyboard();
+    }
+}
+
+void task1() {
+    std::cout << "\n============================================\n";
+    std::cout << "  TASK 1  |  VectorFloat\n";
+    std::cout << "============================================\n";
+
+    section("Constructors");
+    VectorFloat v0;
+    VectorFloat v1(4);
+    VectorFloat v2(4, 3.0f);
+    std::cout << "v0 (default):      " << v0 << "\n";
+    std::cout << "v1 (size=4, zero): " << v1 << "\n";
+    std::cout << "v2 (size=4, 3.0):  " << v2 << "\n";
+
+    section("Unary operators");
+    VectorFloat a(4);
+    inputVector(a, "a");
+    std::cout << "a:          " << a << "\n";
+    std::cout << "++a:        " << (++a) << "\n";
+    std::cout << "a++ result: " << (a++) << "\n";
+    std::cout << "a after ++: " << a << "\n";
+    std::cout << "!a:         " << (!a ? "true" : "false") << "\n";
+    std::cout << "-a:         " << (-a) << "\n";
+
+    section("Expression 1  |  (x+y)*2 - z/1.5 + x%3");
+    VectorFloat x(4), y(4), z(4);
+    inputVector(x, "x");
+    inputVector(y, "y");
+    inputVector(z, "z");
+    VectorFloat r1 = (x + y) * 2.0f - z / 1.5f + x % 3.0f;
+    std::cout << "x:      " << x << "\n";
+    std::cout << "y:      " << y << "\n";
+    std::cout << "z:      " << z << "\n";
+    std::cout << "result: " << r1 << "\n";
+
+    section("Expression 2  |  compound assignment +=, -=, *=, /=, %=");
+    VectorFloat p(4);
+    inputVector(p, "p");
+    std::cout << "p initial: " << p << "\n";
+    p += x; std::cout << "p += x:   " << p << "\n";
+    p -= y; std::cout << "p -= y:   " << p << "\n";
+    p *= 0.5f; std::cout << "p *= 0.5: " << p << "\n";
+    p /= 2.0f; std::cout << "p /= 2.0: " << p << "\n";
+    p %= 3.0f; std::cout << "p %%= 3.0: " << p << "\n";
+
+    section("Expression 3  |  (++u + w--)*2.0/1.5 - (-u)");
+    VectorFloat u(4), w(4);
+    inputVector(u, "u");
+    inputVector(w, "w");
+    VectorFloat r3 = (++u + w--) * 2.0f / 1.5f - (-u);
+    std::cout << "u after ++: " << u << "\n";
+    std::cout << "w after --: " << w << "\n";
+    std::cout << "result:     " << r3 << "\n";
+
+    section("Comparison");
+    std::cout << "r3 > w  : " << (r3 > w  ? "true" : "false") << "\n";
+    std::cout << "u == u  : " << (u == u  ? "true" : "false") << "\n";
+    std::cout << "u != w  : " << (u != w  ? "true" : "false") << "\n";
+
+    section("Index & errorCode");
+    VectorFloat r(4);
+    inputVector(r, "r");
+    std::cout << "r:        " << r << "\n";
+    r[0] = 100.0f;
+    std::cout << "r[0]=100: " << r << "\n";
+    r[99];
+    std::cout << "r[99] -> errorCode=" << r.getErrorCode() << "\n";
+
+    section("Instance counter");
+    std::cout << "VectorFloat instances alive: " << VectorFloat::getInstanceCount() << "\n";
+}
+
+
+void task2() {
+    std::cout << "\n============================================\n";
+    std::cout << "  TASK 2  |  CountryCapital\n";
+    std::cout << "============================================\n";
+
+    auto search = [](CountryCapital& c, const char* key, bool byCountry) {
+        if (byCountry) {
+            const char* r = c[key];
+            if (r) std::cout << "  \"" << key << "\"  ->  capital: \"" << r << "\"\n";
+            else   std::cout << "  \"" << key << "\"  ->  not found! err=" << c.getErrorCode() << "\n";
+            c.clearError();
+        } else {
+            const char* r = c(key);
+            if (r) std::cout << "  capital \"" << key << "\"  ->  country: \"" << r << "\"\n";
+            else   std::cout << "  capital \"" << key << "\"  ->  not found! err=" << c.getErrorCode() << "\n";
+            c.clearError();
+        }
+    };
+
+    section("Choose input method for country-capital pairs");
+    std::cout << "  1 = Enter manually\n";
+    std::cout << "  2 = Use preset data (Ukraine/Kyiv, France/Paris, Germany/Berlin,\n";
+    std::cout << "      Japan/Tokyo, USA/Washington, UK/London,\n";
+    std::cout << "      Spain/Madrid, Italy/Rome, Poland/Warsaw, Canada/Ottawa)\n";
+    std::cout << "Your choice: ";
+    int inputChoice; std::cin >> inputChoice; std::cin.ignore();
+
+    CountryCapital cc(20);
+    if (inputChoice == 2) {
+        cc.fillDefault();
+        std::cout << "\n  Preset data loaded:\n" << cc;
+    } else {
+        std::cin >> cc;
+        std::cout << "  Your data:\n" << cc;
+    }
+
+    section("operator[]  search capital by country");
+    char buf[256];
+    std::cout << "Enter country name to search: ";
+    std::cin.getline(buf, 256);
+    search(cc, buf, true);
+
+    std::cout << "Enter another country (to test not found): ";
+    std::cin.getline(buf, 256);
+    search(cc, buf, true);
+
+    section("operator()  —  search country by capital");
+    std::cout << "Enter capital name to search: ";
+    std::cin.getline(buf, 256);
+    search(cc, buf, false);
+
+    std::cout << "Enter another capital (to test not found): ";
+    std::cin.getline(buf, 256);
+    search(cc, buf, false);
+
+    section("Add new pair");
+    char co[256], ca[256];
+    std::cout << "Enter new country: "; std::cin.getline(co, 256);
+    std::cout << "Enter new capital: "; std::cin.getline(ca, 256);
+    cc.add(co, ca);
+    std::cout << "Updated table:\n" << cc;
+
+    section("Save to file & load");
+    cc.saveToFile("countries.txt");
+    CountryCapital cc2(20);
+    cc2.loadFromFile("countries.txt");
+    std::cout << "Loaded from file:\n" << cc2;
+
+    section("Copy constructor");
+    CountryCapital cc3(cc2);
+    std::cout << "Enter country to add to copy: "; std::cin.getline(co, 256);
+    std::cout << "Enter its capital: "; std::cin.getline(ca, 256);
+    cc3.add(co, ca);
+    std::cout << "cc3 (copy + new pair):\n" << cc3;
+    std::cout << "cc2 (original, unchanged):\n" << cc2;
+}
+
+
+void task3() {
+    std::cout << "\n============================================\n";
+    std::cout << "  TASK 3  |  MatrixFload\n";
+    std::cout << "============================================\n";
+
+    section("Constructors");
+    MatrixFload m0;
+    MatrixFload m1(3);
+    MatrixFload m2(2, 3);
+    MatrixFload m3(2, 3, 4.0f);
+    MatrixFload m4(m3);
+    std::cout << "m0 (empty):\n"        << m0;
+    std::cout << "m1 (identity 3x3):\n" << m1;
+    std::cout << "m2 (zeros 2x3):\n"    << m2;
+    std::cout << "m3 (2x3, val=4):\n"   << m3;
+    std::cout << "m4 (copy of m3):\n"   << m4;
+
+    section("Unary operators");
+    MatrixFload U(2, 3);
+    {
+        int ch; std::cout << "  Input U — choose: 1=keyboard, 2=random: "; std::cin >> ch;
+        if (ch == 2) { U.fillRandom(-5, 5); std::cout << "U (random):\n" << U; }
+        else { std::cin >> U; }
+    }
+    std::cout << "U:\n"          << U;
+    std::cout << "++U:\n"        << (++U);
+    std::cout << "U-- (copy):\n" << (U--);
+    std::cout << "U after --:\n" << U;
+    std::cout << "!U: "          << (!U ? "true" : "false") << "\n";
+    std::cout << "-U:\n"         << (-U);
+
+    section("Enter matrices A, B, C (2x3 each)");
+    MatrixFload A(2, 3), B(2, 3), C(2, 3);
+    {
+        int ch; std::cout << "  Input A — choose: 1=keyboard, 2=random: "; std::cin >> ch;
+        if (ch == 2) { A.fillRandom(1, 9); std::cout << "A (random):\n" << A; }
+        else { std::cin >> A; }
+    }
+    {
+        int ch; std::cout << "  Input B — choose: 1=keyboard, 2=random: "; std::cin >> ch;
+        if (ch == 2) { B.fillRandom(1, 9); std::cout << "B (random):\n" << B; }
+        else { std::cin >> B; }
+    }
+    {
+        int ch; std::cout << "  Input C — choose: 1=keyboard, 2=random: "; std::cin >> ch;
+        if (ch == 2) { C.fillRandom(1, 9); std::cout << "C (random):\n" << C; }
+        else { std::cin >> C; }
+    }
+    std::cout << "A:\n" << A;
+    std::cout << "B:\n" << B;
+    std::cout << "C:\n" << C;
+
+    section("Expression 1  |  (A+B)*2.0 - C/1.5 + A%3");
+    MatrixFload r1 = (A + B) * 2.0f - C / 1.5f + A % 3;
+    std::cout << "result:\n" << r1;
+
+    section("Expression 2  |  compound assignment +=, -=, *=, /=, %=");
+    MatrixFload P(A);
+    std::cout << "P = A initially:\n" << P;
+    P += B;    std::cout << "P += B:\n"    << P;
+    P -= C;    std::cout << "P -= C:\n"    << P;
+    P *= 0.5f; std::cout << "P *= 0.5:\n"  << P;
+    P /= 2.0f; std::cout << "P /= 2.0:\n"  << P;
+    P %= 3;    std::cout << "P %%= 3:\n"    << P;
+
+    section("Expression 3  |  (++Q)*vec - (-A)/1.5 + B");
+    RowVector vec(3);
+    std::cout << "Enter row vector vec (3 elements): ";
+    for (int i = 0; i < 3; i++) std::cin >> vec.data[i];
+    MatrixFload Q(A);
+    MatrixFload r3 = (++Q) * vec - (-A) / 1.5f + B;
+    std::cout << "vec: [ " << vec[0] << ", " << vec[1] << ", " << vec[2] << " ]\n";
+    std::cout << "result:\n" << r3;
+
+    section("Comparison (by sum of elements)");
+    std::cout << "A > B  : " << (A > B  ? "true" : "false") << "\n";
+    std::cout << "A < C  : " << (A < C  ? "true" : "false") << "\n";
+    std::cout << "A >= A : " << (A >= A ? "true" : "false") << "\n";
+    std::cout << "A == A : " << (A == A ? "true" : "false") << "\n";
+    std::cout << "A != B : " << (A != B ? "true" : "false") << "\n";
+
+    section("Instance counter");
+    std::cout << "MatrixFload instances alive: " << MatrixFload::getInstanceCount() << "\n";
+}
+
+int main() {
+    srand(static_cast<unsigned>(time(nullptr)));
+
+    int choice = 0;
+    do {
+        std::cout << "\n============================================\n";
+        std::cout << "  Select task:\n";
+        std::cout << "  1 - VectorFloat\n";
+        std::cout << "  2 - CountryCapital\n";
+        std::cout << "  3 - MatrixFload\n";
+        std::cout << "  0 - Exit\n";
+        std::cout << "============================================\n";
+        std::cout << "Your choice: ";
+        std::cin >> choice;
+        std::cin.ignore();
+
+        switch (choice) {
+            case 1: task1(); break;
+            case 2: task2(); break;
+            case 3: task3(); break;
+            case 0: std::cout << "Goodbye!\n"; break;
+            default: std::cout << "Invalid choice, try again.\n"; break;
+        }
+    } while (choice != 0);
+
+    return 0;
+}
